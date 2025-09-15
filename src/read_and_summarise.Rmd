@@ -1,0 +1,147 @@
+---
+title: "Read site xlsx in and summarise"
+author: "Mikko Arvas"
+date: "`r Sys.time()`"
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(WriteXLS)
+library(readxl)
+library(ggpubr)
+library(patchwork)
+library(ggplot2)
+library(gtsummary)
+
+#echo "rmarkdown::render('comparison_of_donor_characteristics.Rmd', clean=TRUE,output_format='pdf_document',output_file='../results/comparison_of_donor_characteristics.pdf')" | R --slave
+```
+
+
+```{r}
+#define parameters
+param <- list()
+param$wd <- getwd()
+
+# fill more here .....
+```
+
+
+# Real data from all countries
+After collecting xlsx from different countries read them in.
+
+
+```{r}
+datafile <- "../data/Iron review donor summaries 4th version FP.xlsx"
+
+# FI
+fi<- read_excel(datafile,
+                sheet = "FI 2021", 
+                range = "A4:H28",
+                col_names = TRUE,
+                na="NA"
+                ) %>% 
+  mutate(
+    Country="FI",
+#    `Percentage Of LowHb` = `Percentage Of LowHb` *100
+    ) %>% 
+  mutate(
+    `Count Of Donations` = `Count Of Donations` / 5.45e+6 * 10000,  
+    `Count Of Donors` = `Count Of Donors`  / 5.45e+6 * 10000,
+    #MeanHb = MeanHb * 0.01551 * 4, #mmol/L conversion
+    #SdHb = SdHb * 0.01551 * 4,
+    Pre_Attempt = "Attempt"
+  )
+colnames(fi)[grep(pattern = "New",x = colnames(fi))] <- "New_Repeat" 
+
+# NL
+nl<- read_excel(datafile,
+                sheet = "NL 2021", 
+                range = "A4:H40",
+                col_names = TRUE
+                ) %>% 
+  mutate(Country="NL") 
+colnames(nl)[grep(pattern = "New",x = colnames(nl))] <- "New_Repeat" 
+
+nl <- nl %>% 
+  mutate(
+    Pre_Attempt = recode(
+      New_Repeat,
+      "New donor" = "Attempt",
+      "Repeat donor" = "Attempt",
+    ),
+    New_Repeat = recode(
+      New_Repeat,
+      "Pre-donation screening" = "New donor"
+    ),
+    MeanHb = MeanHb / 0.01551 / 4, #g/L conversion
+    SdHb = SdHb / 0.01551 / 4
+  )
+
+
+nl[18,4] <- NA
+nl[24,4] <- NA
+nl[30,4] <- NA
+nl[36,4] <- NA
+
+nl$`Count Of Donations` <- as.integer(nl$`Count Of Donations`)
+nl <- nl %>%   mutate(
+    `Count Of Donations` = `Count Of Donations` / 17e+6 * 10000,  
+    `Count Of Donors` = `Count Of Donors`  / 17e+6 * 10000
+  ) 
+
+# DK
+dk<- read_excel(datafile,
+                sheet = "DK 2021",
+                range = "A4:H28",
+                col_names = TRUE
+                ) %>% 
+  mutate(Country="DK",
+    Pre_Attempt = "Attempt"
+    )
+
+dk[18,4] <- NA
+dk[24,4] <- NA
+dk$`Count Of Donations` <- as.integer(dk$`Count Of Donations`)
+colnames(dk)[grep(pattern = "New",x = colnames(dk))] <- "New_Repeat" 
+
+dk <- dk %>% 
+  mutate(
+    `Count Of Donations` = `Count Of Donations` / 5.85e+6 * 10000,  
+    `Count Of Donors` = `Count Of Donors`  / 5.85e+6 * 10000,
+    MeanHb = MeanHb / 0.01551 / 4, #g/L conversion
+    SdHb = SdHb / 0.01551 / 4
+  )
+
+# UK
+uk<- read_excel(datafile,
+                sheet = "UK 2021",
+                range = "A4:H28",
+                col_names = TRUE
+                ) %>% 
+  mutate(Country="ENG",
+    Pre_Attempt = "Attempt") 
+
+uk$`Count Of Donations` <- as.integer(uk$`Count Of Donations`)
+colnames(uk)[grep(pattern = "New",x = colnames(uk))] <- "New_Repeat" 
+
+uk <- uk %>% 
+  mutate(
+    `Count Of Donations` = `Count Of Donations` / 56.55e+6 * 10000,  
+    `Count Of Donors` = `Count Of Donors`  / 56.55e+6 * 10000,
+    MeanHb = MeanHb / 0.01551 / 4, #g/L conversion
+    SdHb = SdHb / 0.01551 / 4
+  )
+
+data <- bind_rows(nl,dk,uk,fi) %>% 
+  mutate(Sex=as.factor(Sex),
+         Country=factor(Country,levels=c("ENG","FI","NL","DK"), ordered = TRUE),
+         New_Repeat = as.factor(New_Repeat),
+         Pre_Attempt = as.factor(Pre_Attempt),
+         `Age Group` = fct_relevel(as.ordered(`Age Group`),"18-25",after=0)
+         
+  )
+
+summary(data)
+```
+
+
